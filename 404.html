@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CyberGrid — Portfolio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0a0a0f;
+      color: #ff003c;
+      font-family: 'Share Tech Mono', monospace;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    .container {
+      text-align: center;
+      padding: 2rem;
+      position: relative;
+      z-index: 1;
+    }
+    .container::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(255, 0, 60, 0.03) 2px,
+        rgba(255, 0, 60, 0.03) 4px
+      );
+      pointer-events: none;
+      animation: flicker 0.15s infinite;
+    }
+    @keyframes flicker {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.97; }
+    }
+    .logo {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: #ff003c;
+      text-shadow: 0 0 10px #ff003c, 0 0 30px rgba(255, 0, 60, 0.5);
+      margin-bottom: 1rem;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { text-shadow: 0 0 10px #ff003c, 0 0 30px rgba(255, 0, 60, 0.5); }
+      50% { text-shadow: 0 0 20px #ff003c, 0 0 60px rgba(255, 0, 60, 0.8), 0 0 100px rgba(255, 0, 60, 0.3); }
+    }
+    .msg {
+      font-size: 0.9rem;
+      color: rgba(255, 255, 255, 0.6);
+      margin-bottom: 2rem;
+    }
+    .msg span { color: #00ff88; }
+    .bar {
+      width: 200px;
+      height: 3px;
+      background: rgba(255, 0, 60, 0.2);
+      margin: 0 auto;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .bar::after {
+      content: '';
+      display: block;
+      width: 40%;
+      height: 100%;
+      background: #ff003c;
+      box-shadow: 0 0 10px #ff003c;
+      animation: loading 1s ease-in-out infinite;
+    }
+    @keyframes loading {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(350%); }
+    }
+  </style>
+  <script>
+    var target = window.location.pathname;
+    var hash = window.location.hash;
+    var search = window.location.search;
+    var base = window.location.pathname.split('/').slice(0, -1).join('/') || '/';
+    var redirectUrl = base + '/';
+    if (target && target !== '/' && target !== '/404.html' && target !== '/index.html') {
+      redirectUrl = base + '/' + target.replace(/\/$/, '') + search + hash;
+    }
+    setTimeout(function() {
+      window.location.href = redirectUrl;
+    }, 800);
+  </script>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">CYBERGRID</div>
+    <div class="msg">⟳ Rerouting to portfolio... <span>302</span></div>
+    <div class="bar"></div>
+  </div>
+</body>
+</html>
