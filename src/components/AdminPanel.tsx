@@ -3,7 +3,7 @@ import { usePortfolio } from '../contexts/PortfolioContext';
 import { useTheme, getThemes } from '../contexts/ThemeContext';
 import { ContactInfo } from '../types';
 
-type TabKey = 'identity' | 'logo' | 'thumbnails' | 'skills' | 'contact' | 'socials' | 'theme';
+type TabKey = 'identity' | 'logo' | 'thumbnails' | 'skills' | 'contact' | 'socials' | 'theme' | 'deploy';
 
 interface TabDef {
   key: TabKey;
@@ -19,6 +19,7 @@ const TABS: TabDef[] = [
   { key: 'contact', label: 'Contact', icon: <MailIcon /> },
   { key: 'socials', label: 'Socials', icon: <LinkIcon /> },
   { key: 'theme', label: 'Theme', icon: <PaletteIcon /> },
+  { key: 'deploy', label: 'Deploy', icon: <DeployIcon /> },
 ];
 
 // Inline SVG icons for clean look
@@ -43,9 +44,12 @@ function LinkIcon() {
 function PaletteIcon() {
   return <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4.098 19.902a3.75 3.75 0 005.304 0l6.401-6.402M6.75 21A3.75 3.75 0 013 17.25V4.125C3 3.504 3.504 3 4.125 3h5.25c.621 0 1.125.504 1.125 1.125v4.072M6.75 21a3.75 3.75 0 003.75-3.75V8.197M6.75 21h13.125c.621 0 1.125-.504 1.125-1.125v-5.25c0-.621-.504-1.125-1.125-1.125h-4.072M10.5 8.197l2.88-2.88c.438-.439 1.15-.439 1.59 0l3.712 3.713c.44.44.44 1.152 0 1.59l-2.879 2.88M6.75 17.25h.008v.008H6.75v-.008z" /></svg>;
 }
+function DeployIcon() {
+  return <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.338-2.32 3.75 3.75 0 011.338 7.338M6.75 19.5h10.5" /></svg>;
+}
 
 const AdminPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
-  const { data, updateName, updateTagline, updateLogo, addThumbnail, updateThumbnail, deleteThumbnail, addSkill, updateSkill, deleteSkill, updateContact, addSocial, updateSocial, deleteSocial, resetToDefaults } = usePortfolio();
+  const { data, updateName, updateTagline, updateLogo, addThumbnail, updateThumbnail, deleteThumbnail, addSkill, updateSkill, deleteSkill, updateContact, addSocial, updateSocial, deleteSocial, resetToDefaults, exportData, importData } = usePortfolio();
   const { currentTheme, setTheme } = useTheme();
   const themes = getThemes();
 
@@ -863,12 +867,446 @@ const AdminPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen
                 </PreviewCard>
               </div>
             )}
+
+            {/* ===== DEPLOY TAB ===== */}
+            {activeTab === 'deploy' && (
+              <DeployTab exportData={exportData} importData={importData} showToast={showToast} data={data} />
+            )}
           </div>
         </div>
       </div>
     </div>
   );
 };
+
+// ====== DEPLOY TAB COMPONENT ======
+
+function DeployTab({ exportData, importData, showToast, data }: {
+  exportData: () => string;
+  importData: (json: string) => boolean;
+  showToast: (msg: string) => void;
+  data: { name: string; tagline: string; logoUrl: string; thumbnails: any[]; skills: any[]; contact: { email: string; phone: string; socials: any[] } };
+}) {
+  const [importText, setImportText] = useState('');
+  const [showImportArea, setShowImportArea] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [cmdCopied, setCmdCopied] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Generate the EXACT TypeScript code to paste into defaultData.ts
+  const generateTsCode = () => {
+    const d = data;
+    const thumbs = d.thumbnails.map(t =>
+`    { id: '${t.id}', title: '${t.title.replace(/'/g, "\\'")}', imageUrl: '${t.imageUrl}', viewCount: ${t.viewCount}, description: '${(t.description || '').replace(/'/g, "\\'")}' }`
+    ).join(',\n');
+    const skills = d.skills.map(s =>
+`    { id: '${s.id}', name: '${s.name.replace(/'/g, "\\'")}', percentage: ${s.percentage} }`
+    ).join(',\n');
+    const socials = d.contact.socials.map(s =>
+`      { id: '${s.id}', platform: '${s.platform.replace(/'/g, "\\'")}', url: '${s.url}', icon: '${s.icon}' }`
+    ).join(',\n');
+
+    return `import { PortfolioData } from '../types';
+
+export const defaultPortfolioData: PortfolioData = {
+  name: '${d.name.replace(/'/g, "\\'")}',
+  tagline: '${d.tagline.replace(/'/g, "\\'")}',
+  logoUrl: '${d.logoUrl || ''}',
+  thumbnails: [
+${thumbs}
+  ],
+  skills: [
+${skills}
+  ],
+  contact: {
+    email: '${d.contact.email.replace(/'/g, "\\'")}',
+    phone: '${d.contact.phone || ''}',
+    socials: [
+${socials}
+    ],
+  },
+};`;
+  };
+
+  const handleCopyTsCode = () => {
+    const code = generateTsCode();
+    navigator.clipboard.writeText(code).then(() => {
+      setCopied(true);
+      showToast('TYPESCRIPT CODE COPIED');
+      setTimeout(() => setCopied(false), 2500);
+    }).catch(() => {
+      showToast('CLIPBOARD FAILED');
+    });
+  };
+
+  const handleCopyCommands = () => {
+    const cmds = `cd D:\\portfolio
+npm run build
+copy public\\404.html dist\\404.html
+cd dist
+git init
+git add .
+git commit -m "update portfolio"
+git remote add origin https://github.com/zixoaeyt-collab/Thumbnail-portfolioxd.git
+git push -f origin HEAD:gh-pages
+cd ..`;
+    navigator.clipboard.writeText(cmds).then(() => {
+      setCmdCopied(true);
+      showToast('COMMANDS COPIED');
+      setTimeout(() => setCmdCopied(false), 2500);
+    });
+  };
+
+  const handleExport = () => {
+    const json = exportData();
+    navigator.clipboard.writeText(json).then(() => {
+      showToast('JSON DATA COPIED');
+      setTimeout(() => setCopied(false), 2500);
+    }).catch(() => showToast('CLIPBOARD FAILED'));
+  };
+
+  const handleDownload = () => {
+    const json = exportData();
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'portfolio-data.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('DATA FILE DOWNLOADED');
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => { setImportText(ev.target?.result as string); };
+    reader.readAsText(file);
+  };
+
+  const handleImport = () => {
+    const success = importData(importText);
+    if (success) {
+      showToast('DATA IMPORTED SUCCESSFULLY');
+      setImportText('');
+      setShowImportArea(false);
+    } else {
+      showToast('INVALID DATA FORMAT');
+    }
+  };
+
+  return (
+    <div className="space-y-5 animate-fade-in max-w-3xl">
+      <SectionHeader title="DEPLOY TO ALL DEVICES" subtitle="Push admin changes live" />
+
+      {/* ⚠️ Important Info */}
+      <div className="p-4 rounded-lg border" style={{
+        borderColor: 'rgba(255,188,0,0.3)',
+        background: 'rgba(255,188,0,0.05)',
+      }}>
+        <div className="flex gap-3">
+          <span className="text-lg shrink-0">⚠️</span>
+          <div className="text-xs space-y-1" style={{ color: 'rgba(255,188,0,0.9)', fontFamily: 'var(--font-mono)' }}>
+            <p>Admin changes save to <strong style={{ color: '#ffbc00' }}>localStorage</strong> — visible on THIS device only.</p>
+            <p>To show changes <strong style={{ color: '#ffbc00' }}>everywhere</strong>, follow the 3 steps below.</p>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════ */}
+      {/* STEP 1: COPY TYPESCRIPT CODE */}
+      {/* ═══════════════════════════════════════ */}
+      <div className="rounded-xl border overflow-hidden" style={{
+        borderColor: 'var(--glass-border)',
+        background: 'rgba(255,255,255,0.02)',
+      }}>
+        <div className="px-5 py-4 border-b" style={{ borderColor: 'var(--glass-border)' }}>
+          <div className="flex items-center gap-3">
+            <span className="flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold shrink-0" style={{
+              background: 'var(--neon-primary)', color: '#000',
+              boxShadow: '0 0 10px var(--neon-primary)',
+            }}>1</span>
+            <div>
+              <h3 className="text-sm tracking-wider" style={{ fontFamily: 'var(--font-heading)', color: 'var(--neon-primary)' }}>
+                COPY THE CODE
+              </h3>
+              <p className="text-[10px]" style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                Copies exact TypeScript code — paste into <code style={{ color: 'var(--neon-secondary)' }}>src/data/defaultData.ts</code>
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="p-5">
+          {/* Code Preview */}
+          <div className="relative rounded-lg border p-3 mb-4 max-h-40 overflow-auto" style={{
+            borderColor: 'var(--glass-border)',
+            background: 'rgba(0,0,0,0.4)',
+          }}>
+            <pre className="text-[9px] leading-relaxed whitespace-pre-wrap" style={{
+              color: '#a5d6ff',
+              fontFamily: "'Cascadia Code', 'Fira Code', 'Consolas', monospace",
+            }}>
+{generateTsCode()}
+            </pre>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={handleCopyTsCode}
+              className="flex items-center gap-2 px-6 py-2.5 rounded-lg text-xs font-heading tracking-wider transition-all duration-200 hover:scale-[1.03]"
+              style={{
+                background: copied ? '#00ff88' : 'var(--neon-primary)',
+                color: '#000',
+                boxShadow: `0 0 20px ${copied ? '#00ff88' : 'var(--neon-primary)'}`,
+              }}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                {copied
+                  ? <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  : <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9.75a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
+                }
+              </svg>
+              {copied ? '✓ COPIED!' : 'COPY CODE'}
+            </button>
+            <button
+              onClick={handleExport}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-heading tracking-wider transition-all duration-200 hover:scale-[1.03] border"
+              style={{ borderColor: 'var(--glass-border)', color: 'var(--text-primary)' }}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9.75a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" /></svg>
+              COPY JSON
+            </button>
+            <button
+              onClick={handleDownload}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-heading tracking-wider transition-all duration-200 hover:scale-[1.03] border"
+              style={{ borderColor: 'var(--glass-border)', color: 'var(--text-primary)' }}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
+              DOWNLOAD
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════ */}
+      {/* STEP 2: PASTE INTO VS CODE */}
+      {/* ═══════════════════════════════════════ */}
+      <div className="rounded-xl border overflow-hidden" style={{
+        borderColor: 'var(--glass-border)',
+        background: 'rgba(255,255,255,0.02)',
+      }}>
+        <div className="px-5 py-4 border-b" style={{ borderColor: 'var(--glass-border)' }}>
+          <div className="flex items-center gap-3">
+            <span className="flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold shrink-0" style={{
+              background: 'var(--neon-primary)', color: '#000',
+              boxShadow: '0 0 10px var(--neon-primary)',
+            }}>2</span>
+            <div>
+              <h3 className="text-sm tracking-wider" style={{ fontFamily: 'var(--font-heading)', color: 'var(--neon-primary)' }}>
+                PASTE INTO VS CODE
+              </h3>
+              <p className="text-[10px]" style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                Open file → delete all → paste → save
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="p-5 space-y-3 text-xs" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+          {[
+            { icon: '📂', text: 'Open VS Code → File → Open Folder → select your project' },
+            { icon: '📝', text: 'Open: src/data/defaultData.ts' },
+            { icon: '🗑️', text: 'Select ALL content (Ctrl+A) → Delete' },
+            { icon: '📋', text: 'Paste the code you copied (Ctrl+V)' },
+            { icon: '💾', text: 'Save the file (Ctrl+S)' },
+          ].map((step, i) => (
+            <div key={i} className="flex items-start gap-3">
+              <span className="text-sm shrink-0 mt-0.5">{step.icon}</span>
+              <span>{step.text}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════ */}
+      {/* STEP 3: REBUILD & PUSH */}
+      {/* ═══════════════════════════════════════ */}
+      <div className="rounded-xl border overflow-hidden" style={{
+        borderColor: 'var(--glass-border)',
+        background: 'rgba(255,255,255,0.02)',
+      }}>
+        <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--glass-border)' }}>
+          <div className="flex items-center gap-3">
+            <span className="flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold shrink-0" style={{
+              background: 'var(--neon-primary)', color: '#000',
+              boxShadow: '0 0 10px var(--neon-primary)',
+            }}>3</span>
+            <div>
+              <h3 className="text-sm tracking-wider" style={{ fontFamily: 'var(--font-heading)', color: 'var(--neon-primary)' }}>
+                REBUILD & PUSH
+              </h3>
+              <p className="text-[10px]" style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                Run these commands in VS Code terminal
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleCopyCommands}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded text-[10px] font-heading tracking-wider transition-all duration-200 hover:scale-105 border"
+            style={{ borderColor: 'var(--glass-border)', color: 'var(--text-muted)' }}
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              {cmdCopied
+                ? <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                : <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9.75a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
+              }
+            </svg>
+            {cmdCopied ? 'COPIED!' : 'COPY ALL'}
+          </button>
+        </div>
+        <div className="p-5">
+          <div className="rounded-lg p-4 space-y-1" style={{
+            background: 'rgba(0,0,0,0.5)',
+            border: '1px solid var(--glass-border)',
+            fontFamily: "'Cascadia Code', 'Fira Code', 'Consolas', monospace",
+          }}>
+            {[
+              { cmd: 'npm run build', comment: '// Build the site' },
+              { cmd: '', comment: '' },
+              { cmd: 'copy public\\404.html dist\\404.html', comment: '// Copy 404 page' },
+              { cmd: '', comment: '' },
+              { cmd: 'cd dist', comment: '// Enter build folder' },
+              { cmd: 'git init', comment: '// Init git' },
+              { cmd: 'git add .', comment: '// Add files' },
+              { cmd: 'git commit -m "update portfolio"', comment: '// Commit' },
+              { cmd: 'git remote add origin https://github.com/zixoaeyt-collab/Thumbnail-portfolioxd.git', comment: '// Link repo' },
+              { cmd: 'git push -f origin HEAD:gh-pages', comment: '// Push to GitHub Pages' },
+              { cmd: 'cd ..', comment: '// Back to project root' },
+            ].map((line, i) => (
+              <div key={i} className="flex items-baseline gap-2">
+                {line.cmd ? (
+                  <>
+                    <span className="text-[10px] opacity-30 select-none shrink-0 w-5">{'>'}</span>
+                    <code className="text-[11px]" style={{ color: '#00ff88' }}>{line.cmd}</code>
+                  </>
+                ) : (
+                  <div className="h-1" />
+                )}
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] mt-3" style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+            💡 Run each command one at a time. Wait for each to finish before the next.
+          </p>
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════ */}
+      {/* IMPORT SECTION */}
+      {/* ═══════════════════════════════════════ */}
+      <div className="rounded-xl border overflow-hidden" style={{
+        borderColor: 'var(--glass-border)',
+        background: 'rgba(255,255,255,0.02)',
+      }}>
+        <div className="px-5 py-4 border-b" style={{ borderColor: 'var(--glass-border)' }}>
+          <div className="flex items-center gap-3">
+            <span className="text-base">📥</span>
+            <div>
+              <h3 className="text-sm tracking-wider" style={{ fontFamily: 'var(--font-heading)', color: 'var(--neon-primary)' }}>
+                IMPORT DATA
+              </h3>
+              <p className="text-[10px]" style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                Restore previously exported data on this or any device
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="p-5">
+          {!showImportArea ? (
+            <div className="flex gap-3 items-center flex-wrap">
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-heading tracking-wider transition-all duration-200 hover:scale-[1.03] border"
+                style={{ borderColor: 'var(--glass-border)', color: 'var(--text-primary)' }}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m3.75 9v6m3-3H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
+                UPLOAD JSON FILE
+              </button>
+              <button
+                onClick={() => setShowImportArea(true)}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-heading tracking-wider transition-all duration-200 hover:scale-[1.03] border"
+                style={{ borderColor: 'var(--glass-border)', color: 'var(--text-primary)' }}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg>
+                PASTE JSON
+              </button>
+              <input ref={fileInputRef} type="file" accept=".json" onChange={handleFileUpload} className="hidden" />
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <textarea
+                value={importText}
+                onChange={e => setImportText(e.target.value)}
+                placeholder='Paste your JSON data here...'
+                rows={6}
+                className="w-full rounded-lg border p-3 text-xs font-mono resize-none focus:outline-none"
+                style={{
+                  borderColor: 'var(--glass-border)',
+                  background: 'rgba(0,0,0,0.3)',
+                  color: 'var(--text-primary)',
+                }}
+              />
+              <div className="flex gap-3">
+                <button
+                  onClick={handleImport}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-heading tracking-wider transition-all duration-200 hover:scale-[1.03]"
+                  style={{
+                    background: 'var(--neon-primary)',
+                    color: '#000',
+                    boxShadow: '0 0 20px var(--neon-primary)',
+                  }}
+                >
+                  APPLY DATA
+                </button>
+                <button
+                  onClick={() => { setShowImportArea(false); setImportText(''); }}
+                  className="px-4 py-2.5 rounded-lg text-xs border transition-all duration-200 hover:scale-[1.03]"
+                  style={{ borderColor: 'var(--glass-border)', color: 'var(--text-muted)' }}
+                >
+                  CANCEL
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Data Summary */}
+      <div className="p-4 rounded-xl border" style={{
+        borderColor: 'var(--glass-border)',
+        background: 'rgba(255,255,255,0.02)',
+      }}>
+        <h3 className="text-[10px] tracking-[2px] mb-3" style={{ fontFamily: 'var(--font-heading)', color: 'var(--text-muted)' }}>
+          📊 CURRENT DATA
+        </h3>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {[
+            { label: 'Name', value: data.name },
+            { label: 'Thumbnails', value: data.thumbnails.length },
+            { label: 'Skills', value: data.skills.length },
+            { label: 'Socials', value: data.contact.socials.length },
+          ].map((stat, i) => (
+            <div key={i} className="p-2.5 rounded-lg text-center" style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)' }}>
+              <p className="text-[9px] tracking-wider" style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{stat.label}</p>
+              <p className="text-sm font-bold mt-0.5 truncate" style={{ color: 'var(--neon-primary)', fontFamily: 'var(--font-heading)' }}>
+                {stat.value}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ====== REUSABLE COMPONENTS ======
 

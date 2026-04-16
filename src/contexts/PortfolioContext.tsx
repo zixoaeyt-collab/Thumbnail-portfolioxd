@@ -1,44 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { PortfolioData, Thumbnail, Skill, ContactInfo, SocialLink } from '../types';
-
-const defaultPortfolioData: PortfolioData = {
-  name: 'NEXUS//GRID',
-  tagline: 'DIGITAL FRONTIER DESIGNER',
-  logoUrl: '',
-  thumbnails: [
-    { id: '1', title: 'Neon District', imageUrl: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=600&h=400&fit=crop', viewCount: 12847, description: 'Cyberpunk cityscape illustration' },
-    { id: '2', title: 'Chrome Ghost', imageUrl: 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=600&h=400&fit=crop', viewCount: 9532, description: 'Character design concept' },
-    { id: '3', title: 'Data Stream', imageUrl: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=600&h=400&fit=crop', viewCount: 7621, description: 'Abstract data visualization' },
-    { id: '4', title: 'Synthwave', imageUrl: 'https://images.unsplash.com/photo-1563089145-599997674d42?w=600&h=400&fit=crop', viewCount: 15230, description: 'Retro-futuristic poster design' },
-    { id: '5', title: 'Binary Rain', imageUrl: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=600&h=400&fit=crop', viewCount: 6891, description: 'Matrix-inspired motion graphics' },
-    { id: '6', title: 'Circuit Heart', imageUrl: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=600&h=400&fit=crop', viewCount: 11045, description: 'PCB art and circuit design' },
-    { id: '7', title: 'Void Runner', imageUrl: 'https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=600&h=400&fit=crop', viewCount: 8324, description: 'Sci-fi environment concept' },
-    { id: '8', title: 'Phantom UI', imageUrl: 'https://images.unsplash.com/photo-1555949963-aa79dcee981c?w=600&h=400&fit=crop', viewCount: 13567, description: 'Futuristic interface design' },
-    { id: '9', title: 'Neural Link', imageUrl: 'https://images.unsplash.com/photo-1535223289827-42f1e9919769?w=600&h=400&fit=crop', viewCount: 10289, description: 'Brain-computer interface art' },
-  ],
-  skills: [
-    { id: '1', name: 'UI/UX Design', percentage: 95 },
-    { id: '2', name: 'Graphic Design', percentage: 92 },
-    { id: '3', name: 'Motion Graphics', percentage: 88 },
-    { id: '4', name: '3D Modeling', percentage: 82 },
-    { id: '5', name: 'Illustration', percentage: 90 },
-    { id: '6', name: 'Brand Identity', percentage: 85 },
-    { id: '7', name: 'Web Development', percentage: 78 },
-    { id: '8', name: 'Typography', percentage: 93 },
-  ],
-  contact: {
-    email: 'nexus@cybergrid.dev',
-    phone: '',
-    socials: [
-      { id: '1', platform: 'Instagram', url: 'https://instagram.com', icon: 'instagram' },
-      { id: '2', platform: 'Twitter/X', url: 'https://x.com', icon: 'twitter' },
-      { id: '3', platform: 'YouTube', url: 'https://youtube.com', icon: 'youtube' },
-      { id: '4', platform: 'GitHub', url: 'https://github.com', icon: 'github' },
-      { id: '5', platform: 'Discord', url: 'https://discord.com', icon: 'discord' },
-      { id: '6', platform: 'Behance', url: 'https://behance.net', icon: 'behance' },
-    ],
-  },
-};
+import { defaultPortfolioData } from '../data/defaultData';
 
 function loadPortfolio(): PortfolioData {
   const saved = localStorage.getItem('cyber-portfolio');
@@ -69,6 +31,8 @@ interface PortfolioContextType {
   updateSocial: (id: string, social: Partial<SocialLink>) => void;
   deleteSocial: (id: string) => void;
   resetToDefaults: () => void;
+  exportData: () => string;
+  importData: (jsonString: string) => boolean;
 }
 
 const PortfolioContext = createContext<PortfolioContextType>({
@@ -88,6 +52,8 @@ const PortfolioContext = createContext<PortfolioContextType>({
   updateSocial: () => {},
   deleteSocial: () => {},
   resetToDefaults: () => {},
+  exportData: () => '',
+  importData: () => false,
 });
 
 export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -183,13 +149,30 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     localStorage.removeItem('cyber-portfolio');
   }, []);
 
+  const exportData = useCallback(() => {
+    return JSON.stringify(data, null, 2);
+  }, [data]);
+
+  const importData = useCallback((jsonString: string): boolean => {
+    try {
+      const parsed = JSON.parse(jsonString);
+      if (parsed.name && parsed.thumbnails && parsed.skills && parsed.contact) {
+        setData(parsed);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }, []);
+
   return (
     <PortfolioContext.Provider value={{
       data, updateData, updateName, updateTagline, updateLogo,
       addThumbnail, updateThumbnail, deleteThumbnail,
       addSkill, updateSkill, deleteSkill,
       updateContact, addSocial, updateSocial, deleteSocial,
-      resetToDefaults,
+      resetToDefaults, exportData, importData,
     }}>
       {children}
     </PortfolioContext.Provider>
